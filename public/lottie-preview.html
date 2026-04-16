@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lottie Preview</title>
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+    .card { background: white; border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card h3 { font-size: 12px; color: #333; margin: 8px 0 0; }
+    lottie-player { width: 160px; height: 160px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <h1>Lottie Animation Preview</h1>
+  <div class="grid" id="grid"></div>
+  <script>
+    const files = [
+      'cheer-cute.json', 'pikachu_lightning.json', 'dancing_cat.json',
+      'happy_bird.json', 'mario1.json', 'pikachu2.json', 'pokemon.json',
+      'totoro.json', 'cute_monster.json', 'monster_clap.json', 'dongdong.json',
+      'clip_e.json', 'mascot4.json', 'mascot7.json', 'mascot8.json',
+      'happy_robot.json', 'cheer-cheers.json', 'cheer-cool.json',
+      'cheer-smile.json', 'cute_toy.json', 'cheer-energetic.json', 'cheer-jumping.json'
+    ];
+    const grid = document.getElementById('grid');
+    files.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const player = document.createElement('lottie-player');
+      player.setAttribute('src', '/lottie/' + f);
+      player.setAttribute('background', 'transparent');
+      player.setAttribute('speed', '1');
+      player.setAttribute('loop', '');
+      player.setAttribute('autoplay', '');
+      card.appendChild(player);
+      const title = document.createElement('h3');
+      title.textContent = f;
+      card.appendChild(title);
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>
