@@ -17,6 +17,8 @@ export type LuckyWheelData = {
   presets: Preset[];
 };
 
+export type RiggedSequenceMap = Record<string, string[]>;
+
 const DEFAULT_PRESETS: Preset[] = [
   {
     id: 'preset-1',
@@ -62,6 +64,46 @@ const DATA_KEY = 'luckyWheelData';
 // After the next spin, this key is automatically deleted.
 const RIG_KEY = 'luckyWheel.riggedResult';
 
+function sanitizeRiggedState(value: unknown): RiggedSequenceMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([presetId, queue]) => {
+      if (!Array.isArray(queue)) {
+        return [];
+      }
+
+      const validQueue = queue.filter((itemId): itemId is string => typeof itemId === 'string');
+      return validQueue.length > 0 ? [[presetId, validQueue]] : [];
+    }),
+  );
+}
+
+export function readRiggedState(fallbackPresetId?: string): RiggedSequenceMap {
+  const raw = localStorage.getItem(RIG_KEY);
+  if (!raw) return {};
+
+  try {
+    return sanitizeRiggedState(JSON.parse(raw));
+  } catch {
+    if (!fallbackPresetId) return {};
+    return { [fallbackPresetId]: [raw] };
+  }
+}
+
+export function writeRiggedState(state: RiggedSequenceMap) {
+  const sanitized = sanitizeRiggedState(state);
+
+  if (Object.keys(sanitized).length === 0) {
+    localStorage.removeItem(RIG_KEY);
+    return;
+  }
+
+  localStorage.setItem(RIG_KEY, JSON.stringify(sanitized));
+}
+
 export function useLuckyWheel() {
   const [data, setData] = useState<LuckyWheelData>(() => {
     try {
@@ -92,25 +134,36 @@ export function useLuckyWheel() {
   };
 
   // Reads and immediately deletes the rig key (one-time use).
-  // Returns the matching WheelItem ID if the ID matches, otherwise null.
+  // Returns the next matching WheelItem ID for the active preset, otherwise null.
   const consumeRiggedResult = useCallback((): string | null => {
-    const riggedId = localStorage.getItem(RIG_KEY);
-    if (!riggedId) return null;
+    const riggedState = readRiggedState(activePreset.id);
+    const queue = [...(riggedState[activePreset.id] ?? [])];
+    if (queue.length === 0) return null;
 
-    // Always clear the rig key after reading — it's a one-shot directive
-    localStorage.removeItem(RIG_KEY);
+    let matchedId: string | null = null;
 
-    // Look up by ID in the currently active preset
-    const match = activePreset.items.find((item) => item.id === riggedId);
+    while (queue.length > 0) {
+      const nextId = queue.shift()!;
+      const match = activePreset.items.find((item) => item.id === nextId);
 
-    if (!match) {
-      // ID not found — rig is silently ignored, spin is random
-      console.warn(`[luckyWheel] Rigged ID "${riggedId}" not found in current preset. Spinning randomly.`);
-      return null;
+      if (match) {
+        matchedId = match.id;
+        break;
+      }
+
+      console.warn(`[luckyWheel] Rigged ID "${nextId}" not found in preset "${activePreset.name}". Skipping it.`);
     }
 
-    return match.id;
-  }, [activePreset.items]);
+    const nextRiggedState = { ...riggedState };
+    if (queue.length > 0) {
+      nextRiggedState[activePreset.id] = queue;
+    } else {
+      delete nextRiggedState[activePreset.id];
+    }
+    writeRiggedState(nextRiggedState);
+
+    return matchedId;
+  }, [activePreset.id, activePreset.items, activePreset.name]);
 
   const updatePresetItems = (presetId: string, items: WheelItem[]) => {
     setData((prev) => ({

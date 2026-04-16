@@ -182,14 +182,15 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Hero header — centered logo */}
-      <header className="text-center pt-10 pb-6 px-4 relative z-10">
-        <Logo />
-      </header>
+      {/* Centered Main Game Area */}
+      <div className="flex-1 flex flex-col items-center justify-center p-4 relative z-10">
+        {/* Hero header — centered logo */}
+        <header className="text-center mb-8 md:mb-12">
+          <Logo />
+        </header>
 
-      {/* Wheel area */}
-      <div className="flex flex-col items-center px-4 py-6 relative z-10">
-        <div className="w-full max-w-xl">
+        {/* Wheel area */}
+        <div className="w-full max-w-xl relative">
           <Wheel
             items={activePreset.items}
             spinParams={spinParams}
@@ -201,7 +202,7 @@ function App() {
         <button
           onClick={handleSpinClick}
           disabled={spinParams.isSpinning || activePreset.items.length === 0}
-          className="mt-10 group relative overflow-hidden rounded-full bg-gradient-to-tr from-primary to-blue-400 px-14 py-5 text-white shadow-[0_0_40px_rgba(59,130,246,0.35)] transition-all hover:scale-105 hover:shadow-[0_0_60px_rgba(59,130,246,0.55)] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none active:scale-95"
+          className="mt-12 group relative overflow-hidden rounded-full bg-gradient-to-tr from-primary to-blue-400 px-14 py-5 text-white shadow-[0_0_40px_rgba(59,130,246,0.35)] transition-all hover:scale-105 hover:shadow-[0_0_60px_rgba(59,130,246,0.55)] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none active:scale-95"
         >
           <span className="relative z-10 text-2xl font-bold tracking-wider uppercase">
             {spinParams.isSpinning ? 'Spinning…' : 'Spin the Wheel'}
@@ -210,8 +211,8 @@ function App() {
         </button>
       </div>
 
-      {/* Settings area */}
-      <div className="flex-1 border-t border-slate-200 bg-white mt-4 relative z-10">
+      {/* Settings area at the bottom */}
+      <div className="border-t border-slate-200 bg-white/80 backdrop-blur-md relative z-10">
         <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Preset title + item list */}
           <div className="lg:col-span-7">

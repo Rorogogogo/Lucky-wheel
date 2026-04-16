@@ -1,19 +1,15 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { readRiggedState, writeRiggedState, type LuckyWheelData, type Preset, type RiggedSequenceMap } from '../hooks/useLuckyWheel';
 
-const RIG_KEY = 'luckyWheel.riggedResult';
 const DATA_KEY = 'luckyWheelData';
-
-type WheelItem = { id: string; label: string; color: string };
-type Preset = { id: string; name: string; items: WheelItem[] };
-type WheelData = { activePresetId: string; presets: Preset[] };
 
 const FONT_URL = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap';
 
 export function RigPage() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [activePresetId, setActivePresetId] = useState('');
-  const [currentRig, setCurrentRig] = useState<string | null>(null);
+  const [riggedState, setRiggedState] = useState<RiggedSequenceMap>({});
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -29,29 +25,61 @@ export function RigPage() {
     try {
       const raw = localStorage.getItem(DATA_KEY);
       if (raw) {
-        const d: WheelData = JSON.parse(raw);
+        const d: LuckyWheelData = JSON.parse(raw);
         setPresets(d.presets || []);
         setActivePresetId(d.activePresetId || '');
+        setRiggedState(readRiggedState(d.activePresetId || d.presets?.[0]?.id));
       }
     } catch { /* ignore */ }
-    setCurrentRig(localStorage.getItem(RIG_KEY));
   }, []);
 
   const activePreset = presets.find((p) => p.id === activePresetId) ?? presets[0];
+  const activeQueue = activePreset ? riggedState[activePreset.id] ?? [] : [];
+  const queuedCountByPreset = Object.fromEntries(
+    presets.map((preset) => [preset.id, riggedState[preset.id]?.length ?? 0]),
+  );
+  const totalQueuedCount = Object.values(riggedState).reduce((sum, queue) => sum + queue.length, 0);
 
-  const selectRig = (id: string) => {
-    localStorage.setItem(RIG_KEY, id);
-    setCurrentRig(id);
+  const updateRiggedState = (nextState: RiggedSequenceMap) => {
+    writeRiggedState(nextState);
+    setRiggedState(nextState);
+  };
+
+  const queueRig = (id: string) => {
+    if (!activePreset) return;
+
+    updateRiggedState({
+      ...riggedState,
+      [activePreset.id]: [...activeQueue, id],
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const clearRig = () => {
-    localStorage.removeItem(RIG_KEY);
-    setCurrentRig(null);
+  const removeQueuedRig = (index: number) => {
+    if (!activePreset) return;
+
+    const nextQueue = activeQueue.filter((_, queueIndex) => queueIndex !== index);
+    const nextState = { ...riggedState };
+
+    if (nextQueue.length > 0) {
+      nextState[activePreset.id] = nextQueue;
+    } else {
+      delete nextState[activePreset.id];
+    }
+
+    updateRiggedState(nextState);
   };
 
-  const riggedItem = presets.flatMap(p => p.items).find(i => i.id === currentRig);
+  const clearActiveQueue = () => {
+    if (!activePreset) return;
+
+    const nextState = { ...riggedState };
+    delete nextState[activePreset.id];
+    updateRiggedState(nextState);
+  };
+
+  const getItemById = (itemId: string) => presets.flatMap((preset) => preset.items).find((item) => item.id === itemId);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
@@ -83,7 +111,7 @@ export function RigPage() {
             Admin Console
           </h1>
           <p className="text-center text-sm text-[#737373] tracking-wide" style={{ fontFamily: "'Inter', sans-serif" }}>
-            Rig the next spin result. For authorized eyes only.
+            Build a per-category result sequence. For authorized eyes only.
           </p>
         </header>
 
@@ -95,36 +123,35 @@ export function RigPage() {
           className="border border-[#111] p-5 mb-8 transition-all duration-200"
           style={{ borderRadius: 0 }}
         >
-          {currentRig ? (
-            <div className="flex items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div
-                  className="w-4 h-4 flex-shrink-0 border border-[#111]"
-                  style={{ backgroundColor: riggedItem?.color || '#CC0000', borderRadius: 0 }}
-                />
-                <div>
-                  <p
-                    className="text-[10px] uppercase tracking-[0.25em] text-[#CC0000] font-medium mb-0.5"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    Target Locked
-                  </p>
-                  <p className="text-2xl font-black" style={{ fontFamily: "'Playfair Display', serif" }}>
-                    {riggedItem?.label || 'Unknown'}
-                  </p>
-                </div>
+          {totalQueuedCount > 0 ? (
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p
+                  className="text-[10px] uppercase tracking-[0.25em] text-[#CC0000] font-medium mb-1"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  Sequence Armed
+                </p>
+                <p className="text-2xl font-black" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {totalQueuedCount} queued result{totalQueuedCount === 1 ? '' : 's'}
+                </p>
+                <p className="text-sm text-[#737373] mt-1" style={{ fontFamily: "'Inter', sans-serif" }}>
+                  {Object.values(queuedCountByPreset).filter((count) => count > 0).length} config group{Object.values(queuedCountByPreset).filter((count) => count > 0).length === 1 ? '' : 's'} ready. Each spin consumes the next result from the active group only.
+                </p>
               </div>
-              <button
-                onClick={clearRig}
-                className="border border-[#111] bg-transparent px-4 py-2 text-[11px] uppercase tracking-[0.15em] font-semibold hover:bg-[#111] hover:text-[#F9F9F7] transition-all duration-200 cursor-pointer"
-                style={{ borderRadius: 0, fontFamily: "'Inter', sans-serif" }}
-              >
-                Clear
-              </button>
+              {activeQueue.length > 0 && (
+                <button
+                  onClick={clearActiveQueue}
+                  className="border border-[#111] bg-transparent px-4 py-2 text-[11px] uppercase tracking-[0.15em] font-semibold hover:bg-[#111] hover:text-[#F9F9F7] transition-all duration-200 cursor-pointer"
+                  style={{ borderRadius: 0, fontFamily: "'Inter', sans-serif" }}
+                >
+                  Clear Current
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-sm text-[#737373]" style={{ fontFamily: "'Inter', sans-serif" }}>
-              No rig active &mdash; the next spin will be random.
+              No rig sequence active &mdash; every spin will be random.
             </p>
           )}
         </section>
@@ -153,7 +180,19 @@ export function RigPage() {
                     }`}
                     style={{ borderRadius: 0, fontFamily: "'Inter', sans-serif" }}
                   >
-                    {p.name}
+                    <span>{p.name}</span>
+                    {queuedCountByPreset[p.id] > 0 && (
+                      <span
+                        className={`ml-2 inline-flex min-w-6 items-center justify-center border px-1.5 py-0.5 text-[10px] uppercase tracking-wider ${
+                          p.id === activePresetId
+                            ? 'border-[#F9F9F7] text-[#F9F9F7]'
+                            : 'border-[#111] text-[#111]'
+                        }`}
+                        style={{ borderRadius: 0, fontFamily: "'JetBrains Mono', monospace" }}
+                      >
+                        {queuedCountByPreset[p.id]}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -166,20 +205,20 @@ export function RigPage() {
               className="text-[10px] uppercase tracking-[0.25em] font-medium text-[#737373] mb-4"
               style={{ fontFamily: "'JetBrains Mono', monospace" }}
             >
-              Pick the Winner
+              Queue Winners
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-0">
               {(activePreset?.items ?? []).map((item, idx) => {
-                const isSelected = currentRig === item.id;
+                const queuedCount = activeQueue.filter((queuedId) => queuedId === item.id).length;
                 const cols = 3; // md cols
                 const isLastCol = (idx + 1) % cols === 0;
                 return (
                   <button
                     key={item.id}
-                    onClick={() => selectRig(item.id)}
+                    onClick={() => queueRig(item.id)}
                     className={`relative flex items-center gap-3 px-4 py-4 text-left border-b border-r border-[#111] transition-all duration-200 cursor-pointer ${
-                      isSelected
+                      queuedCount > 0
                         ? 'bg-[#111] text-[#F9F9F7]'
                         : 'bg-transparent hover:bg-[#E5E5E0]'
                     } ${isLastCol ? 'md:border-r-0' : ''}`}
@@ -189,24 +228,87 @@ export function RigPage() {
                       className="w-3 h-3 flex-shrink-0 border"
                       style={{
                         backgroundColor: item.color,
-                        borderColor: isSelected ? '#F9F9F7' : '#111',
+                        borderColor: queuedCount > 0 ? '#F9F9F7' : '#111',
                         borderRadius: 0,
                       }}
                     />
                     <span className="text-sm font-semibold truncate">
                       {item.label}
                     </span>
-                    {isSelected && (
+                    {queuedCount > 0 && (
                       <span
                         className="ml-auto text-[10px] uppercase tracking-wider text-[#CC0000] font-bold flex-shrink-0"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}
                       >
-                        Locked
+                        x{queuedCount}
                       </span>
                     )}
                   </button>
                 );
               })}
+            </div>
+
+            <div className="mt-8 border border-[#111]">
+              <div className="flex items-center justify-between border-b border-[#111] px-4 py-3">
+                <div>
+                  <p
+                    className="text-[10px] uppercase tracking-[0.25em] font-medium text-[#737373] mb-1"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Current Sequence
+                  </p>
+                  <p className="text-lg font-black" style={{ fontFamily: "'Playfair Display', serif" }}>
+                    {activePreset?.name || 'No category selected'}
+                  </p>
+                </div>
+                {activeQueue.length > 0 && (
+                  <button
+                    onClick={clearActiveQueue}
+                    className="border border-[#111] bg-transparent px-3 py-2 text-[10px] uppercase tracking-[0.15em] font-semibold hover:bg-[#111] hover:text-[#F9F9F7] transition-all duration-200 cursor-pointer"
+                    style={{ borderRadius: 0, fontFamily: "'Inter', sans-serif" }}
+                  >
+                    Clear Group
+                  </button>
+                )}
+              </div>
+
+              {activeQueue.length > 0 ? (
+                <div className="divide-y divide-[#111]">
+                  {activeQueue.map((itemId, index) => {
+                    const queuedItem = getItemById(itemId);
+                    return (
+                      <div key={`${itemId}-${index}`} className="flex items-center gap-4 px-4 py-3">
+                        <div
+                          className="flex h-8 w-8 items-center justify-center border border-[#111] text-[11px] font-bold"
+                          style={{ borderRadius: 0, fontFamily: "'JetBrains Mono', monospace" }}
+                        >
+                          {index + 1}
+                        </div>
+                        <div
+                          className="w-3 h-3 flex-shrink-0 border border-[#111]"
+                          style={{ backgroundColor: queuedItem?.color || '#CC0000', borderRadius: 0 }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold" style={{ fontFamily: "'Inter', sans-serif" }}>
+                            {queuedItem?.label || 'Unknown item'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => removeQueuedRig(index)}
+                          className="border border-[#111] bg-transparent px-3 py-2 text-[10px] uppercase tracking-[0.15em] font-semibold hover:bg-[#111] hover:text-[#F9F9F7] transition-all duration-200 cursor-pointer"
+                          style={{ borderRadius: 0, fontFamily: "'Inter', sans-serif" }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="px-4 py-6 text-sm text-[#737373]" style={{ fontFamily: "'Inter', sans-serif" }}>
+                  Nothing queued for this group yet. Click items above to build the order they should come out.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -223,7 +325,7 @@ export function RigPage() {
               style={{ borderRadius: 0 }}
             >
               <p className="text-sm font-semibold" style={{ fontFamily: "'Inter', sans-serif" }}>
-                Target locked. Go spin the wheel.
+                Added to the sequence. The next spin for this group will use the first queued result.
               </p>
             </motion.div>
           )}

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { type WheelItem } from '../hooks/useLuckyWheel';
 import { useWheelSound } from '../hooks/useWheelSound';
-import { MapPin, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { CheerCharacters } from './CheerCharacter';
 
 const SPIN_DURATION = 8000; // ms — total spin time
@@ -19,6 +19,9 @@ export function Wheel({ items, spinParams, onStop }: WheelProps) {
   const spinTimeout = useRef<number | null>(null);
   const rAFRef = useRef<number | null>(null);
   const wheelRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<HTMLDivElement>(null);
+  const laserRef = useRef<HTMLDivElement>(null);
+  const auraRef = useRef<HTMLDivElement>(null);
   const { playWin, playTick } = useWheelSound();
 
   useEffect(() => {
@@ -40,20 +43,14 @@ export function Wheel({ items, spinParams, onStop }: WheelProps) {
       const winner = items[targetIndex];
       const sliceAngle = 360 / items.length;
 
-      // Exact angle needed to land the target slice under the pointer (top)
       const targetAngle = 360 - (targetIndex * sliceAngle + sliceAngle / 2);
-
-      // 8 full dramatic spins + the target angle
       const fullSpins = 360 * 8;
       const newRotation = rotation + fullSpins + (targetAngle - (rotation % 360));
-
-      // Slight random wobble inside the slice (feels natural, not robotic)
       const noise = (Math.random() - 0.5) * (sliceAngle * 0.6);
       const finalRotation = newRotation + noise;
 
       setRotation(finalRotation);
 
-      // Accurately track visual rotation with requestAnimationFrame to play ticks
       let lastAngle = rotation % 360;
       if (lastAngle < 0) lastAngle += 360;
       let currentTotalRotation = rotation;
@@ -79,6 +76,27 @@ export function Wheel({ items, spinParams, onStop }: WheelProps) {
             currentTotalRotation += delta;
             const currentSlice = Math.floor(currentTotalRotation / sliceAngle);
 
+            // Jitter the center hub
+            if (pointerRef.current) {
+              const sliceProgress = (currentTotalRotation % sliceAngle) / sliceAngle;
+              const tiltScale = 8; 
+              let pointerTilt = 0;
+              
+              if (sliceProgress > 0.8) {
+                pointerTilt = ((sliceProgress - 0.8) / 0.2) * tiltScale;
+              } else if (sliceProgress < 0.2) {
+                pointerTilt = ((0.2 - sliceProgress) / 0.2) * tiltScale;
+              }
+              pointerRef.current.style.transform = `rotate(${pointerTilt}deg)`;
+            }
+
+            if (laserRef.current) {
+              laserRef.current.style.transform = `rotate(${-currentTotalRotation * 1.5}deg)`;
+            }
+            if (auraRef.current) {
+              auraRef.current.style.transform = `rotate(${currentTotalRotation * 0.5}deg)`;
+            }
+
             if (currentSlice > previousSlice) {
               const progress = Math.min(1, (currentTotalRotation - rotation) / (finalRotation - rotation));
               const volume = Math.max(0.1, 0.4 - progress * 0.3);
@@ -95,6 +113,7 @@ export function Wheel({ items, spinParams, onStop }: WheelProps) {
       if (spinTimeout.current) clearTimeout(spinTimeout.current);
       spinTimeout.current = window.setTimeout(() => {
         if (rAFRef.current) cancelAnimationFrame(rAFRef.current);
+        if (pointerRef.current) pointerRef.current.style.transform = 'rotate(0deg)';
         playWin();
         onStop(winner);
       }, SPIN_DURATION);
@@ -133,105 +152,101 @@ export function Wheel({ items, spinParams, onStop }: WheelProps) {
   };
 
   return (
-    <div className="relative w-full aspect-square mx-auto">
-      {/* Cheer Characters — scattered around the wheel */}
+    <div className="relative w-full aspect-square mx-auto flex items-center justify-center">
+      {/* Anime Cheer Characters */}
       <CheerCharacters isSpinning={spinParams.isSpinning} />
 
-      {/* Energy Aura Ring around the wheel */}
+      {/* Energy Aura Ring */}
       <AnimatePresence>
         {spinParams.isSpinning && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1 }}
-            className="absolute inset-[-40px] z-0"
+            className="absolute inset-[-40px] z-0 pointer-events-none"
           >
-            {/* Rotating blurred ring */}
-            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-500/30 via-blue-500/10 to-indigo-500/30 blur-[40px] animate-spin-slow" />
+            <div ref={auraRef} className="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-500/30 via-blue-500/10 to-indigo-500/30 blur-[40px]" />
             <div className="absolute inset-0 rounded-full border-[2px] border-indigo-500/20 animate-pulse" />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Premium Sparkle Particles */}
+      {/* Sparkle Particles */}
       <AnimatePresence>
         {spinParams.isSpinning && (
-          <>
+          <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
             {[...Array(8)].map((_, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, scale: 0 }}
-                animate={{ 
-                  opacity: [0, 1, 0], 
-                  scale: [0, 1, 0.5],
-                  x: Math.random() * 500 - 250,
-                  y: Math.random() * 500 - 250,
-                }}
-                transition={{ 
-                  duration: 2 + Math.random(), 
-                  repeat: Infinity, 
-                  delay: i * 0.2,
-                  ease: "easeOut"
-                }}
-                className="absolute left-1/2 top-1/2 z-30 pointer-events-none"
+                animate={{ opacity: [0, 1, 0], scale: [0, 1, 0], x: (Math.random() - 0.5) * 400, y: (Math.random() - 0.5) * 400 }}
+                transition={{ duration: 2, repeat: Infinity, delay: i * 0.2 }}
+                className="absolute left-1/2 top-1/2"
               >
-                <Sparkles className="w-5 h-5 text-yellow-400/60 fill-yellow-200/30 blur-[0.5px]" />
+                <Sparkles className="w-5 h-5 text-yellow-400/60" />
               </motion.div>
             ))}
-          </>
+          </div>
         )}
       </AnimatePresence>
 
-      {/* Outer glow — intensifies while spinning */}
-      <div
-        className={`absolute inset-0 rounded-full transition-all duration-700 pointer-events-none ${
-          spinParams.isSpinning
-            ? 'shadow-[0_0_80px_20px_rgba(99,102,241,0.2)]'
-            : 'shadow-[0_0_20px_rgba(0,0,0,0.08)]'
-        }`}
-      />
+      {/* Outer glow */}
+      <div className={`absolute inset-0 rounded-full transition-all duration-700 pointer-events-none ${spinParams.isSpinning ? 'shadow-[0_0_80px_20px_rgba(99,102,241,0.2)]' : 'shadow-[0_0_20px_rgba(0,0,0,0.08)]'}`} />
 
-      {/* Counter-clockwise laser sweep — rim only, center is masked out by the wheel itself */}
+      {/* Laser sweep */}
       {spinParams.isSpinning && (
-        <div className="absolute inset-[-6px] rounded-full pointer-events-none z-0">
-          {/* Primary purple laser beam rotating on the rim */}
-          <div
-            className="laser-sweep absolute inset-0 rounded-full"
-            style={{
-              background:
-                'conic-gradient(from 0deg, transparent 0deg, rgba(139,92,246,0.0) 180deg, rgba(139,92,246,0.7) 310deg, rgba(255,255,255,1) 355deg, rgba(139,92,246,0.0) 360deg)',
-            }}
-          />
+        <div ref={laserRef} className="absolute inset-[-6px] rounded-full pointer-events-none z-0">
+          <div className="absolute inset-0 rounded-full" style={{ background: 'conic-gradient(from 0deg, transparent 0deg, rgba(139,92,246,0.0) 180deg, rgba(139,92,246,0.7) 310deg, rgba(255,255,255,1) 355deg, rgba(139,92,246,0.0) 360deg)' }} />
         </div>
       )}
       
-      {/* Pointer with vibration animation */}
-      <motion.div 
-        animate={spinParams.isSpinning ? {
-          rotate: [180, 183, 177, 180],
-          y: [0, -1, 1, 0],
-        } : { rotate: 180, y: 0 }}
-        transition={spinParams.isSpinning ? {
-          repeat: Infinity,
-          duration: 0.1,
-          ease: "linear"
-        } : { duration: 0.3 }}
-        className="absolute top-[-20px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center drop-shadow-md origin-bottom"
-      >
-        <MapPin className="w-10 h-10 text-destructive fill-destructive" />
-      </motion.div>
+      {/* Pointer Hub — mathematically centered using flex-center container */}
+      <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+        <div 
+          ref={pointerRef}
+          className="relative flex items-center justify-center"
+          style={{ width: '44px', height: '44px' }}
+        >
+          {/* The Needle — Bolder, shorter "Blade" style pointing UP */}
+          <div 
+            className="absolute bottom-1/2 left-1/2 -translate-x-1/2"
+            style={{ height: '130px', width: '40px' }}
+          >
+            <svg width="40" height="130" viewBox="0 0 40 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+              {/* Bold tapered blade body */}
+              <path d="M20 0L38 120C38 125 30 130 20 130C10 130 2 125 2 120L20 0Z" fill="#ef4444" />
+              {/* Metallic highlight edge */}
+              <path d="M20 5L34 118C34 118 28 124 20 124V5Z" fill="white" fillOpacity="0.2" />
+              {/* Tip highlight */}
+              <path d="M20 0L24 20L20 18L16 20L20 0Z" fill="white" fillOpacity="0.3" />
+            </svg>
+          </div>
+
+          {/* The Hub Base (Glowing Pivot) */}
+          <div className="absolute inset-0 bg-white rounded-full border-4 border-slate-200 shadow-xl flex items-center justify-center overflow-hidden">
+            {/* Inner details for depth */}
+            <div className="w-full h-full bg-gradient-to-b from-white to-slate-100 flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-slate-400 shadow-inner border border-white/50 flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full bg-slate-600 opacity-50" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Center Hub Glow Aura */}
+          <div className="absolute inset-[-12px] rounded-full bg-indigo-500/10 blur-xl -z-10 animate-pulse" />
+        </div>
+      </div>
 
       {/* Wheel */}
-      <div className="relative w-full h-full rounded-full overflow-hidden border-[6px] border-white shadow-inner bg-white">
+      <div className="relative w-full h-full rounded-full overflow-hidden border-[10px] border-white shadow-[0_10px_40px_rgba(0,0,0,0.1)] bg-white">
         <div
           ref={wheelRef}
           className="w-full h-full relative"
           style={{
             transform: `rotate(${rotation}deg)`,
-            // 8s with a smooth, natural deceleration
             transition: spinParams.isSpinning
               ? `transform ${SPIN_DURATION}ms cubic-bezier(0.1, 0, 0.2, 1)`
-              : 'transform 0.3s ease-out',
+              : 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
           }}
         >
           {items.length === 1 ? (
@@ -270,9 +285,6 @@ export function Wheel({ items, spinParams, onStop }: WheelProps) {
           )}
         </div>
       </div>
-
-      {/* Center pin */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full border-4 border-slate-200 z-10 shadow-sm" />
     </div>
   );
 }

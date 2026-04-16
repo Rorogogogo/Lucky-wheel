@@ -11,19 +11,20 @@ interface CheerCharacterConfig {
   flipX?: boolean;
 }
 
+// RESTORING THE FULL SQUAD AS REQUESTED
 const CHEER_CHARACTERS: CheerCharacterConfig[] = [
   {
     src: '/lottie/cheer-cute.json',
     bubble: 'You got this! ✨',
     size: 'w-24 h-24 md:w-40 md:h-40',
-    position: 'absolute -right-10 md:-right-36 top-[15%]',
+    position: 'absolute -right-10 md:-right-40 top-[15%]',
     delay: 0.1,
   },
   {
     src: '/lottie/dancing_cat.json',
     bubble: 'Go! Go!',
     size: 'w-20 h-20 md:w-36 md:h-36',
-    position: 'absolute -left-10 md:-left-36 top-[20%]',
+    position: 'absolute -left-10 md:-left-40 top-[20%]',
     delay: 0.2,
     flipX: true,
   },
@@ -31,14 +32,14 @@ const CHEER_CHARACTERS: CheerCharacterConfig[] = [
     src: '/lottie/pokemon.json',
     bubble: 'Let\'s go~!',
     size: 'w-16 h-16 md:w-28 md:h-28',
-    position: 'absolute -right-6 md:-right-28 bottom-[10%]',
+    position: 'absolute -right-6 md:-right-32 bottom-[10%]',
     delay: 0.35,
   },
   {
     src: '/lottie/pikachu2.json',
     bubble: 'Pika!',
     size: 'w-14 h-14 md:w-24 md:h-24',
-    position: 'absolute -left-4 md:-left-24 bottom-[15%]',
+    position: 'absolute -left-4 md:-left-28 bottom-[15%]',
     delay: 0.45,
   },
   {
@@ -57,15 +58,12 @@ const CHEER_CHARACTERS: CheerCharacterConfig[] = [
   },
 ];
 
-interface CheerCharacterProps {
-  isSpinning: boolean;
-}
-
 // Ensure Lottie component is correctly handled
 const LottieComponent = (Lottie as any).default || Lottie;
 
 function SingleCheer({ config, isSpinning }: { config: CheerCharacterConfig; isSpinning: boolean }) {
   const [animationData, setAnimationData] = useState<any>(null);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -77,11 +75,13 @@ function SingleCheer({ config, isSpinning }: { config: CheerCharacterConfig; isS
       .then((data) => {
         if (mounted) setAnimationData(data);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (mounted) setHasError(true);
+      });
     return () => { mounted = false; };
   }, [config.src]);
 
-  if (!animationData) return null;
+  if (!animationData || hasError) return null;
 
   return (
     <AnimatePresence>
@@ -93,7 +93,7 @@ function SingleCheer({ config, isSpinning }: { config: CheerCharacterConfig; isS
           transition={{ duration: 0.4, delay: config.delay, type: 'spring', stiffness: 300, damping: 20 }}
           className={`z-30 pointer-events-none flex flex-col items-center ${config.position}`}
         >
-          {/* Speech Bubble — only show if there's text */}
+          {/* Speech Bubble */}
           {config.bubble && (
             <motion.div
               initial={{ opacity: 0, y: 8, scale: 0.7 }}
@@ -121,7 +121,7 @@ function SingleCheer({ config, isSpinning }: { config: CheerCharacterConfig; isS
   );
 }
 
-export function CheerCharacters({ isSpinning }: CheerCharacterProps) {
+export function CheerCharacters({ isSpinning }: { isSpinning: boolean }) {
   return (
     <>
       {CHEER_CHARACTERS.map((config, i) => (
